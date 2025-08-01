@@ -1,0 +1,48 @@
+import yfinance as yf
+import pandas as pd
+from ta.momentum import RSIIndicator
+from ta.trend import EMAIndicator
+import requests
+import time
+
+# Configuración de Telegram
+TOKEN = '8320612557:AAGNnn2T5J5whwUxDvgt6CYxloeD35YLjVo'
+CHAT_ID = '7603418695'
+
+# Configuración del par
+PAIR = 'EURUSD=X'
+PERIODOS = 50
+
+def enviar_mensaje(mensaje):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {'chat_id': CHAT_ID, 'text': mensaje}
+    requests.post(url, data=payload)
+
+def analizar_mercado():
+    df = yf.download(PAIR, interval='1m', period='1d')
+    df = df.tail(PERIODOS)
+
+    df['ema9'] = EMAIndicator(close=df['Close'], window=9).ema_indicator()
+    df['ema21'] = EMAIndicator(close=df['Close'], window=21).ema_indicator()
+    df['rsi'] = RSIIndicator(close=df['Close'], window=14).rsi()
+
+    ultima = df.iloc[-1]
+    penultima = df.iloc[-2]
+
+    mensaje = None
+
+    if penultima['ema9'] < penultima['ema21'] and ultima['ema9'] > ultima['ema21'] and ultima['rsi'] > 30:
+        mensaje = "📈 Señal de COMPRA (CALL) en EUR/USD - 1 minuto"
+    elif penultima['ema9'] > penultima['ema21'] and ultima['ema9'] < ultima['ema21'] and ultima['rsi'] < 70:
+        mensaje = "📉 Señal de VENTA (PUT) en EUR/USD - 1 minuto"
+
+    if mensaje:
+        enviar_mensaje(mensaje)
+
+# Bucle cada minuto
+while True:
+    try:
+        analizar_mercado()
+    except Exception as e:
+        enviar_mensaje(f"⚠️ Error en el bot: {e}")
+    time.sleep(60)
